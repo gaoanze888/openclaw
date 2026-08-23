@@ -23,7 +23,7 @@ import {
   resolveSubagentSessionStatus,
 } from "../agents/subagents/registry/subagent-registry-read.js";
 import { resolveQueueSettingsCore } from "../auto-reply/reply/queue/settings.js";
-import { resolveEffectiveResponseUsage } from "../auto-reply/thinking.js";
+import { normalizeReasoningLevel, resolveEffectiveResponseUsage } from "../auto-reply/thinking.js";
 import {
   buildGroupDisplayName,
   buildGroupDisplayTitle,
@@ -521,6 +521,15 @@ export function buildGatewaySessionRow(params: {
     resolvedContextTokens: resolvedCurrentContextTokens,
     authoredContextTokens,
   });
+
+  const storedReasoningLevel = normalizeOptionalString(entry?.reasoningLevel);
+  const effectiveReasoningLevel =
+    (storedReasoningLevel
+      ? (normalizeReasoningLevel(storedReasoningLevel) ?? storedReasoningLevel)
+      : undefined) ??
+    normalizeReasoningLevel(cfg.agents?.entries?.[sessionAgentId]?.reasoningDefault) ??
+    normalizeReasoningLevel(cfg.agents?.defaults?.reasoningDefault) ??
+    "off";
   const fastModeState = resolveFastModeState({
     cfg,
     provider: selectedModelProvider,
@@ -633,6 +642,7 @@ export function buildGatewaySessionRow(params: {
     verboseLevel: entry?.verboseLevel,
     traceLevel: entry?.traceLevel,
     reasoningLevel: entry?.reasoningLevel,
+    effectiveReasoningLevel,
     elevatedLevel: entry?.elevatedLevel,
     sendPolicy: entry?.sendPolicy,
     inputTokens: entry?.inputTokens,

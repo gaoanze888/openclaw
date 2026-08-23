@@ -162,3 +162,19 @@ it("preserves active run id ownership across omitted, liveness, and exact states
     session: { hasActiveRun: true, activeRunIds: ["run-1"] },
   });
 });
+
+it("projects effective reasoning level for session change subscribers", () => {
+  expect(
+    buildGatewaySessionEventFields({
+      sessionRow: {
+        key: "agent:main:main",
+        kind: "direct",
+        updatedAt: 5,
+        effectiveReasoningLevel: "stream",
+      },
+    }),
+  ).toMatchObject({
+    reasoningLevel: undefined,
+    effectiveReasoningLevel: "stream",
+  });
+});
