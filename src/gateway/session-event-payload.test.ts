@@ -61,3 +61,19 @@ it("projects the prepared permission boundary only for an explicit mode", () => 
     }),
   ).toMatchObject({ permissionMode: "workspace", sessionRoot: "/workspace/project" });
 });
+
+it("projects effective reasoning level for session change subscribers", () => {
+  expect(
+    buildGatewaySessionEventFields({
+      sessionRow: {
+        key: "agent:main:main",
+        kind: "direct",
+        updatedAt: 5,
+        effectiveReasoningLevel: "stream",
+      },
+    }),
+  ).toMatchObject({
+    reasoningLevel: undefined,
+    effectiveReasoningLevel: "stream",
+  });
+});
