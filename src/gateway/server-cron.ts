@@ -1,5 +1,3 @@
-// Gateway cron runtime service runs scheduled agent turns, heartbeat wakeups,
-// plugin hooks, notifications, and cron lifecycle cleanup.
 import { retireSessionMcpRuntime } from "../agents/agent-bundle-mcp-tools.js";
 import { isAgentDeletionBlocked } from "../agents/agent-lifecycle-registry.js";
 import {
@@ -8,6 +6,9 @@ import {
   tryResolveAmbientOwnerAgentId,
 } from "../agents/agent-scope.js";
 import { abortAndDrainEmbeddedAgentRun } from "../agents/embedded-agent.js";
+// Gateway cron runtime service runs scheduled agent turns, heartbeat wakeups,
+// plugin hooks, notifications, and cron lifecycle cleanup.
+import { getAvailablePreparedModelCatalogSnapshot } from "../agents/prepared-model-catalog.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import type { CliDeps } from "../cli/deps.types.js";
 import { getRuntimeConfig } from "../config/io.js";
@@ -735,14 +736,29 @@ export function buildGatewayCronService(params: {
       // Emit even without a stored row: clients run a canonical list refresh on
       // every sessions.changed, which also clears badges on prior bindings
       // (e.g. after retargeting a job to a not-yet-created session).
-      const sessionRow = loadGatewaySessionRow(sessionKey);
+      const sessionAgentId =
+        parseAgentSessionKey(sessionKey)?.agentId ??
+        normalizeAgentId(job.agentId ?? cron.getDefaultAgentId());
+      const modelCatalog = getAvailablePreparedModelCatalogSnapshot({
+        agentId: sessionAgentId,
+        config: getRuntimeConfig(),
+      })?.entries;
+      const sessionRow = loadGatewaySessionRow(sessionKey, {
+        agentId: sessionAgentId,
+        ...(modelCatalog !== undefined ? { modelCatalog } : {}),
+      });
       params.broadcast(
         "sessions.changed",
         {
           sessionKey,
           reason: "cron-binding",
           ts: Date.now(),
-          ...(sessionRow ? buildGatewaySessionEventFields({ sessionRow }) : {}),
+          ...(sessionRow
+            ? buildGatewaySessionEventFields({
+                sessionRow,
+                agentId: sessionAgentId,
+              })
+            : {}),
         },
         { dropIfSlow: true },
       );
