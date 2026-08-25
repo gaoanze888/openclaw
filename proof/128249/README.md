@@ -1,6 +1,6 @@
 # PR #128249 real Control UI proof
 
-- OpenClaw commit: `104e052ecc185d945dccd3f471bd115dc24d9541`
+- OpenClaw commit: `4b9c018694e6cb4ac1fae3afd4900db16565cc8f`
 - Gateway: real `openclaw gateway run`, loopback, isolated state directory
 - Persistence: real SQLite session store and exact assistant transcript APIs
 - Browser: headless Google Chrome via Playwright, 1440x1000
