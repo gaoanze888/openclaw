@@ -59,7 +59,19 @@ function broadcastSessionsChanged(
   const unscopedOwnerAgentId = payload.sessionKey
     ? tryResolveSessionCompatibilityOwnerAgentId(cfg, payload.sessionKey)
     : undefined;
-  const effectiveAgentId = payload.agentId ?? unscopedOwnerAgentId;
+  const effectiveAgentId = (() => {
+    if (payload.agentId) {
+      return payload.agentId;
+    }
+    if (!payload.sessionKey) {
+      return unscopedOwnerAgentId;
+    }
+    try {
+      return resolveAgentIdFromSessionKey(payload.sessionKey, unscopedOwnerAgentId);
+    } catch {
+      return unscopedOwnerAgentId;
+    }
+  })();
   const modelCatalog = effectiveAgentId
     ? getAvailablePreparedModelCatalogSnapshot({
         agentId: effectiveAgentId,
