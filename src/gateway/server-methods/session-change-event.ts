@@ -1,4 +1,5 @@
 // Shared sessions.changed broadcaster for gateway RPC and chat-command mutations.
+import type { ModelCatalogEntry } from "../../agents/model-catalog.types.js";
 import { getAvailablePreparedModelCatalogSnapshot } from "../../agents/prepared-model-catalog.js";
 import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import { hasSessionChangeReceivers } from "../session-change-receivers.js";
@@ -14,6 +15,8 @@ type SessionChangedPayload = {
   agentId?: string;
   reason: string;
   compacted?: boolean;
+  /** Internal projection input; never serialize into the sessions.changed payload. */
+  modelCatalog?: ModelCatalogEntry[];
 };
 
 type SessionChangeContext = Pick<
@@ -72,12 +75,14 @@ function broadcastSessionsChanged(
       return unscopedOwnerAgentId;
     }
   })();
-  const modelCatalog = effectiveAgentId
-    ? getAvailablePreparedModelCatalogSnapshot({
-        agentId: effectiveAgentId,
-        config: cfg,
-      })?.entries
-    : undefined;
+  const modelCatalog =
+    payload.modelCatalog ??
+    (effectiveAgentId
+      ? getAvailablePreparedModelCatalogSnapshot({
+          agentId: effectiveAgentId,
+          config: cfg,
+        })?.entries
+      : undefined);
   const sessionRow = payload.sessionKey
     ? loadGatewaySessionRow(
         payload.sessionKey,
@@ -109,10 +114,11 @@ function broadcastSessionsChanged(
           defaultAgentId: unscopedOwnerAgentId,
         })
       : null;
+  const { modelCatalog: _modelCatalog, ...eventPayload } = payload;
   context.broadcastToConnIds(
     "sessions.changed",
     {
-      ...payload,
+      ...eventPayload,
       ...(effectiveAgentId ? { agentId: effectiveAgentId } : {}),
       ts: Date.now(),
       ...(sessionRow
