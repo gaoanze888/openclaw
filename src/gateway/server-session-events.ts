@@ -3,6 +3,7 @@
 import path from "node:path";
 import { asPositiveSafeInteger } from "@openclaw/normalization-core/number-coercion";
 import { normalizeOptionalString } from "@openclaw/normalization-core/string-coerce";
+import type { ModelCatalogEntry } from "../agents/model-catalog.js";
 import { getRuntimeConfig } from "../config/io.js";
 import { tryResolveLegacyCompatibilityAgentId } from "../config/legacy.default-agent-owner.js";
 import { parseSqliteSessionFileMarker } from "../config/sessions/legacy-sqlite-marker.js";
@@ -76,6 +77,7 @@ export function createTranscriptUpdateBroadcastHandler(params: {
   sessionEventSubscribers: SessionEventSubscribers;
   sessionMessageSubscribers: SessionMessageSubscribers;
   chatAbortControllers: Map<string, ChatAbortControllerEntry>;
+  loadModelCatalog?: (agentId: string) => Promise<ModelCatalogEntry[] | undefined>;
 }) {
   // Ordering is a per-transcript contract: subscribers merge each session's
   // updates independently, so lanes keyed by transcript identity keep message
@@ -137,6 +139,7 @@ async function handleTranscriptUpdateBroadcast(
     sessionEventSubscribers: SessionEventSubscribers;
     sessionMessageSubscribers: SessionMessageSubscribers;
     chatAbortControllers: Map<string, ChatAbortControllerEntry>;
+    loadModelCatalog?: (agentId: string) => Promise<ModelCatalogEntry[] | undefined>;
   },
   update: InternalSessionTranscriptUpdate,
 ): Promise<void> {
@@ -207,7 +210,7 @@ async function handleTranscriptUpdateBroadcast(
     !parseAgentSessionKey(sessionKey) && !effectiveAgentId ? stableCompatibilityAgentId : undefined;
   const storageAgentId = effectiveAgentId ?? stableUnscopedOwner;
   const visibleAgentId = effectiveAgentId;
-  const routingAgentId = effectiveAgentId ?? stableUnscopedOwner;
+  const routingAgentId = effectiveAgentId ?? stableUnscopedOwner ?? targetKeyAgentId;
   const connIds = new Set<string>();
   for (const connId of params.sessionEventSubscribers.getAll()) {
     connIds.add(connId);
@@ -281,9 +284,11 @@ async function handleTranscriptUpdateBroadcast(
   }
   // Message frames must keep transcript-derived live usage (dashboard API
   // contract from #50101); the 64KB cap bounds the per-message tail read.
+  const modelCatalog = routingAgentId ? await params.loadModelCatalog?.(routingAgentId) : undefined;
   const sessionRow = loadGatewaySessionRow(sessionKey, {
     agentId: routingAgentId,
     transcriptUsageMaxBytes: 64 * 1024,
+    ...(modelCatalog !== undefined ? { modelCatalog } : {}),
   });
   const activeRunState =
     sessionRow &&
@@ -361,8 +366,9 @@ export function createLifecycleEventBroadcastHandler(params: {
   broadcastToConnIds: GatewayBroadcastToConnIdsFn;
   sessionEventSubscribers: SessionEventSubscribers;
   chatAbortControllers: Map<string, ChatAbortControllerEntry>;
+  loadModelCatalog?: (agentId: string) => Promise<ModelCatalogEntry[] | undefined>;
 }) {
-  return (event: SessionLifecycleEvent): void => {
+  return async (event: SessionLifecycleEvent): Promise<void> => {
     const swarmEvent = event as SessionLifecycleEvent & {
       swarmGroupId?: string;
       kind?: "phase" | "log";
@@ -383,8 +389,12 @@ export function createLifecycleEventBroadcastHandler(params: {
       (persistedOwner.kind === "configured" ? persistedOwner.agentId : undefined) ??
       compatibilityDefaultAgentId;
     const rowAgentId = eventAgentId ?? stableOwnerAgentId;
+    const modelCatalog = rowAgentId ? await params.loadModelCatalog?.(rowAgentId) : undefined;
     const sessionRow = rowAgentId
-      ? loadGatewaySessionRow(event.sessionKey, { agentId: rowAgentId })
+      ? loadGatewaySessionRow(event.sessionKey, {
+          agentId: rowAgentId,
+          ...(modelCatalog !== undefined ? { modelCatalog } : {}),
+        })
       : undefined;
     const activeRunState =
       sessionRow && (sessionRow.key !== "global" || rowAgentId)
