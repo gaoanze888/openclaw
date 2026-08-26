@@ -8,8 +8,6 @@ import {
 import { abortAndDrainEmbeddedAgentRun } from "../agents/embedded-agent.js";
 // Gateway cron runtime service runs scheduled agent turns, heartbeat wakeups,
 // plugin hooks, notifications, and cron lifecycle cleanup.
-import { getAvailablePreparedModelCatalogSnapshot } from "../agents/prepared-model-catalog.js";
-import { getInProcessGatewayToolContext } from "../agents/tools/in-process-gateway.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import type { CliDeps } from "../cli/deps.types.js";
 import { getRuntimeConfig } from "../config/io.js";
@@ -740,30 +738,8 @@ export function buildGatewayCronService(params: {
       const sessionAgentId =
         parseAgentSessionKey(sessionKey)?.agentId ??
         normalizeAgentId(job.agentId ?? cron.getDefaultAgentId());
-      let modelCatalog:
-        | Awaited<ReturnType<GatewayRequestContext["loadGatewayModelCatalog"]>>
-        | undefined;
-      const gatewayContext =
-        job.sessionTarget === "isolated"
-          ? getInProcessGatewayToolContext()
-          : (getInProcessGatewayToolContext() ?? params.resolveGatewayContext?.());
-      if (gatewayContext) {
-        try {
-          modelCatalog = await gatewayContext.loadGatewayModelCatalog({ agentId: sessionAgentId });
-        } catch (error) {
-          cronLogger.warn(
-            { err: formatErrorMessage(error), agentId: sessionAgentId },
-            "cron: failed to load model catalog for session event",
-          );
-        }
-      }
-      modelCatalog ??= getAvailablePreparedModelCatalogSnapshot({
-        agentId: sessionAgentId,
-        config: getRuntimeConfig(),
-      })?.entries;
       const sessionRow = loadGatewaySessionRow(sessionKey, {
         agentId: sessionAgentId,
-        ...(modelCatalog !== undefined ? { modelCatalog } : {}),
       });
       params.broadcast(
         "sessions.changed",
