@@ -852,7 +852,7 @@ describe("createLifecycleEventBroadcastHandler", () => {
     runtimeConfigState.value = {};
     sessionRow.key = "agent:main:main";
   });
-  it("projects swarm phase and log payload fields", () => {
+  it("projects swarm phase and log payload fields", async () => {
     const broadcastToConnIds = vi.fn();
     const handler = createLifecycleEventBroadcastHandler({
       broadcastToConnIds,
@@ -860,7 +860,7 @@ describe("createLifecycleEventBroadcastHandler", () => {
       chatAbortControllers: new Map(),
     });
 
-    handler({
+    await handler({
       sessionKey: "agent:main:main",
       reason: "swarm-note",
       swarmGroupId: "swarm:agent:main:main:run-1",
@@ -891,7 +891,7 @@ describe("createLifecycleEventBroadcastHandler", () => {
     });
 
     try {
-      handler({
+      await handler({
         sessionKey: "agent:main:main",
         reason: "rename",
         label: "Renamed session",
@@ -911,7 +911,7 @@ describe("createLifecycleEventBroadcastHandler", () => {
   it.each([
     { name: "projects bare active state without disclosing the persisted owner's goal" },
     { name: "publishes active state and goal for the qualified owner", agentId: "ops" },
-  ])("$name", ({ agentId }) => {
+  ])("$name", async ({ agentId }) => {
     runtimeConfigState.value = {
       session: { store: "/tmp/owned-shared.sqlite" },
       agents: {
@@ -945,7 +945,7 @@ describe("createLifecycleEventBroadcastHandler", () => {
       chatAbortControllers: new Map([["run-before-finalize", activeRun]]),
     });
 
-    handler({ sessionKey: "global", ...(agentId ? { agentId } : {}), reason: "updated" });
+    await handler({ sessionKey: "global", ...(agentId ? { agentId } : {}), reason: "updated" });
 
     expect(loadGatewaySessionRowMock).toHaveBeenCalledWith("global", { agentId: "ops" });
     expect(broadcastToConnIds).toHaveBeenCalledWith(
