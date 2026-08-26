@@ -1,6 +1,5 @@
 // Shared sessions.changed broadcaster for gateway RPC and chat-command mutations.
 import type { ModelCatalogEntry } from "../../agents/model-catalog.types.js";
-import { getAvailablePreparedModelCatalogSnapshot } from "../../agents/prepared-model-catalog.js";
 import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import { hasSessionChangeReceivers } from "../session-change-receivers.js";
 import { buildGatewaySessionSnapshot } from "../session-event-payload.js";
@@ -75,14 +74,7 @@ function broadcastSessionsChanged(
       return unscopedOwnerAgentId;
     }
   })();
-  const modelCatalog =
-    payload.modelCatalog ??
-    (effectiveAgentId
-      ? getAvailablePreparedModelCatalogSnapshot({
-          agentId: effectiveAgentId,
-          config: cfg,
-        })?.entries
-      : undefined);
+  const modelCatalog = payload.modelCatalog;
   const sessionRow = payload.sessionKey
     ? loadGatewaySessionRow(
         payload.sessionKey,
