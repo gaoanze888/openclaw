@@ -1,7 +1,7 @@
 # PR #128249 exact-head Control UI proof
 
-- Functional PR head: `3a73fee56c28e3673d75c939db7300d42e32f13b`
-- Control UI build reported by the real Gateway: `2026.8.1-3a73fee56c28-2026-08-30T05-59-55.242Z`
+- Functional PR head: `49ad9dc4c9b903b2e53314be87ec5c29de7ca7ec`
+- Control UI build reported by the real Gateway: `2026.8.1-49ad9dc4c9b9-2026-08-30T06-40-52.027Z`
 - Gateway: real `openclaw gateway run`, loopback, isolated state directory
 - Persistence: real SQLite session store and persisted transcripts
 - Browser: headless Chrome for Testing through Playwright, 1440x1000
@@ -10,17 +10,17 @@
 
 ## Results
 
-| Policy                   | Before patch event                        | After patch event | Matching events | Destructive `off` | RPC / label       |
-| ------------------------ | ----------------------------------------- | ----------------- | --------------: | ----------------- | ----------------- |
-| inherited `on`           | reasoning absent on the initial stale row | reasoning visible |               2 | no                | success / visible |
-| inherited `stream`       | reasoning hidden                          | reasoning hidden  |               2 | no                | success / visible |
-| model capability default | reasoning visible                         | reasoning visible |               2 | no                | success / visible |
+| Policy                   | Before patch event | After patch event | Matching events | Destructive `off` | RPC / label       |
+| ------------------------ | ------------------ | ----------------- | --------------: | ----------------- | ----------------- |
+| inherited `on`           | reasoning visible  | reasoning visible |               2 | no                | success / visible |
+| inherited `stream`       | reasoning hidden   | reasoning hidden  |               2 | no                | success / visible |
+| model capability default | reasoning visible  | reasoning visible |               2 | no                | success / visible |
 
-The inherited-`on` case is the direct peer-refresh proof: the initial stale row omitted the reasoning projection, then the exact-head `sessions.patch` event repaired the Control UI to show the persisted reasoning block. The `stream` case remained hidden and the model-derived case remained visible.
+All three cases passed the harness. The inherited-`on` and model-derived rows retained their completed reasoning blocks across a real lifecycle patch; inherited `stream` remained transient-only. Every updated label rendered in the same browser page.
 
 Artifacts:
 
-- `exact-3a73fee56-on.png`
-- `exact-3a73fee56-stream.png`
-- `exact-3a73fee56-model.png`
-- `exact-head-proof-3a73fee56.json`
+- `exact-49ad9dc4c-on.png`
+- `exact-49ad9dc4c-stream.png`
+- `exact-49ad9dc4c-model.png`
+- `exact-head-proof-49ad9dc4c.json`

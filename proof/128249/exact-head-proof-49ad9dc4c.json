@@ -1,0 +1,35 @@
+[
+  {
+    "commit": "49ad9dc4c",
+    "id": "on",
+    "expectedReasoningVisible": true,
+    "beforeReasoningVisible": true,
+    "afterReasoningVisible": true,
+    "labelVisible": true,
+    "matchingEventCount": 2,
+    "eventContainsDestructiveOff": false,
+    "rpcOk": true
+  },
+  {
+    "commit": "49ad9dc4c",
+    "id": "stream",
+    "expectedReasoningVisible": false,
+    "beforeReasoningVisible": false,
+    "afterReasoningVisible": false,
+    "labelVisible": true,
+    "matchingEventCount": 2,
+    "eventContainsDestructiveOff": false,
+    "rpcOk": true
+  },
+  {
+    "commit": "49ad9dc4c",
+    "id": "model",
+    "expectedReasoningVisible": true,
+    "beforeReasoningVisible": true,
+    "afterReasoningVisible": true,
+    "labelVisible": true,
+    "matchingEventCount": 2,
+    "eventContainsDestructiveOff": false,
+    "rpcOk": true
+  }
+]
