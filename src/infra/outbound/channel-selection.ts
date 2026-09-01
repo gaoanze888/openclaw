@@ -18,10 +18,7 @@ import {
 } from "../../utils/message-channel.js";
 import { createDedupeCache } from "../dedupe.js";
 import { formatErrorMessage } from "../errors.js";
-import {
-  normalizeDeliverableOutboundChannel,
-  resolveOutboundChannelPlugin,
-} from "./channel-resolution.js";
+import { resolveOutboundChannelPlugin } from "./channel-resolution.js";
 import { listRuntimeVisibleChannelPlugins } from "./runtime-visible-channels.js";
 
 /** Source that explains how message channel selection chose its result. */
@@ -32,7 +29,10 @@ function resolveAvailableKnownChannel(params: {
   value?: string | null;
   agentId?: string;
 }): { channel: string; plugin: ChannelPlugin } | undefined {
-  const normalized = normalizeDeliverableOutboundChannel(params.value);
+  // Normalize without proving deliverability here: request-scoped custom
+  // channels are resolved by resolveOutboundChannelPlugin below, and a
+  // static CHANNEL_IDS prefilter would reject them before scoped resolution.
+  const normalized = normalizeMessageChannel(params.value);
   if (!normalized) {
     return undefined;
   }

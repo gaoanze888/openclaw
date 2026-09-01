@@ -267,9 +267,9 @@ describe("resolveMessageChannelSelection", () => {
     {
       params: { cfg: {} as never, channel: "channel:C123", fallbackChannel: "beta" },
       expected: {
-        channel: "beta",
+        channel: "channel:c123",
         configured: [],
-        source: "tool-context-fallback",
+        source: "explicit",
       },
     },
     {
@@ -531,6 +531,9 @@ describe("resolveMessageChannelSelection", () => {
 
   it.each([
     {
+      setup: () => {
+        mocks.resolveOutboundChannelPlugin.mockReturnValue(undefined);
+      },
       params: { cfg: {} as never, channel: "channel:C123", fallbackChannel: "not-a-channel" },
       expectedMessage:
         'Unknown channel "channel:c123". Run `openclaw channels list --all` to see configured and installable channels.',
