@@ -233,6 +233,27 @@ describe("Codex app-server dynamic tool build", () => {
     expect(onYieldDetected).toHaveBeenCalledWith("Research started; results will follow.");
   });
 
+  it("forwards inbound audio state into the constructed coding-tool options", async () => {
+    const workspaceDir = path.join(tempDir, "inbound-audio-workspace");
+    const params = createParams(path.join(tempDir, "session.jsonl"), workspaceDir);
+    params.disableTools = false;
+    params.runtimePlan = createCodexRuntimePlanFixture();
+    params.currentInboundAudio = true;
+    params.replyOperation = { acceptedSteeredInboundAudio: false } as never;
+    let capturedOptions: Parameters<typeof createOpenClawCodingTools>[0] | undefined;
+    setOpenClawCodingToolsFactoryForTests((options) => {
+      capturedOptions = options;
+      return [];
+    });
+
+    await buildDynamicToolsForTest(params, workspaceDir, { sandbox: null as never });
+
+    expect((capturedOptions as { currentInboundAudio?: boolean }).currentInboundAudio).toBe(true);
+    expect(
+      (capturedOptions as { hasCurrentInboundAudio?: () => boolean }).hasCurrentInboundAudio?.(),
+    ).toBe(true);
+  });
+
   it("binds a resolver-backed constructed tool surface exactly once", async () => {
     const workspaceDir = path.join(tempDir, "resolver-bound-workspace");
     const params = createParams(path.join(tempDir, "resolver-bound-session.jsonl"), workspaceDir);

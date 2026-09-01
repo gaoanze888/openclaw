@@ -292,6 +292,14 @@ export async function buildDynamicTools(
     agentId: input.sessionAgentId,
     policyAgentId: input.policyAgentId,
     ...toolRunContext,
+    currentInboundAudio: params.currentInboundAudio,
+    ...(params.replyOperation
+      ? {
+          hasCurrentInboundAudio: () =>
+            params.currentInboundAudio === true ||
+            params.replyOperation?.acceptedSteeredInboundAudio === true,
+        }
+      : {}),
     exec: {
       ...params.execOverrides,
       ...(input.sessionPermissionPolicy ? { mode: input.sessionPermissionPolicy.execMode } : {}),
