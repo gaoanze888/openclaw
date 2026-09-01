@@ -502,7 +502,8 @@ export async function sendSubagentAnnounceDirectly(params: {
           delivered: false,
           path: "direct",
           reason: "visible_reply_missing",
-          error: "completion agent did not produce a visible reply",
+          error: "child produced no output (nothing to announce)",
+          disposition: "permanent_failure",
         };
       }
     }
@@ -515,7 +516,7 @@ export async function sendSubagentAnnounceDirectly(params: {
         delivered: false,
         path: "direct",
         reason: "visible_reply_missing",
-        error: "completion agent did not produce a visible reply",
+        error: "child produced no output (nothing to announce)",
         disposition: "permanent_failure",
       };
     }
@@ -532,7 +533,8 @@ export async function sendSubagentAnnounceDirectly(params: {
           delivered: false,
           path: "direct",
           reason: "visible_reply_missing",
-          error: "completion agent did not produce a visible reply",
+          error: "child produced no output (nothing to announce)",
+          disposition: "permanent_failure",
         };
       }
       if (subagentDirectMessageCompletionRequiresMessageTool) {

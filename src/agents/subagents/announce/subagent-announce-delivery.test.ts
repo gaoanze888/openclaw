@@ -1948,7 +1948,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
       delivered: false,
       path: "direct",
       reason: "visible_reply_missing",
-      error: "completion agent did not produce a visible reply",
+      error: "child produced no output (nothing to announce)",
     });
     expect(sendMessage).not.toHaveBeenCalled();
   });
@@ -2859,7 +2859,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     expectRecordFields(result, {
       delivered: false,
       path: "direct",
-      error: "completion agent did not produce a visible reply",
+      error: "child produced no output (nothing to announce)",
       reason: "visible_reply_missing",
       phases: [
         {
@@ -2867,14 +2867,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
           delivered: false,
           path: "direct",
           reason: "visible_reply_missing",
-          error: "completion agent did not produce a visible reply",
-        },
-        {
-          phase: "steer-fallback",
-          delivered: false,
-          path: "none",
-          reason: "steer_dropped",
-          error: undefined,
+          error: "child produced no output (nothing to announce)",
         },
       ],
     });
@@ -3830,7 +3823,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
         delivered: false,
         path: "direct",
         reason: "visible_reply_missing",
-        error: "completion agent did not produce a visible reply",
+        error: "child produced no output (nothing to announce)",
       },
     },
     {
@@ -3843,14 +3836,14 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
         delivered: false,
         path: "direct",
         reason: "visible_reply_missing",
-        error: "completion agent did not produce a visible reply",
+        error: "child produced no output (nothing to announce)",
         disposition: "permanent_failure",
         phases: [
           {
             phase: "direct-primary",
             delivered: false,
             path: "direct",
-            error: "completion agent did not produce a visible reply",
+            error: "child produced no output (nothing to announce)",
           },
         ],
       },
@@ -3981,7 +3974,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
         delivered: false,
         path: "direct",
         reason: "visible_reply_missing",
-        error: "completion agent did not produce a visible reply",
+        error: "child produced no output (nothing to announce)",
         disposition: "permanent_failure",
       });
       expectGatewayAgentParams(callGateway, {
@@ -4049,7 +4042,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
         delivered: false,
         path: "direct",
         reason: "visible_reply_missing",
-        error: "completion agent did not produce a visible reply",
+        error: "child produced no output (nothing to announce)",
       });
       expectGatewayAgentParams(callGateway, {
         deliver: false,
@@ -4136,7 +4129,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
         delivered: false,
         path: "direct",
         reason: "visible_reply_missing",
-        error: "completion agent did not produce a visible reply",
+        error: "child produced no output (nothing to announce)",
         disposition: "permanent_failure",
       },
     },
@@ -4147,7 +4140,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
         delivered: false,
         path: "direct",
         reason: "visible_reply_missing",
-        error: "completion agent did not produce a visible reply",
+        error: "child produced no output (nothing to announce)",
         disposition: "permanent_failure",
       },
     },
@@ -4158,7 +4151,7 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
         delivered: false,
         path: "direct",
         reason: "visible_reply_missing",
-        error: "completion agent did not produce a visible reply",
+        error: "child produced no output (nothing to announce)",
         disposition: "permanent_failure",
       },
     },
