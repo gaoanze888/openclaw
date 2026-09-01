@@ -208,7 +208,7 @@ function redactValue(
       : undefined;
     if (candidate) {
       result[key] = value;
-      if (typeof value === "string" && !isEnvVarPlaceholder(value)) {
+      if (typeof value === "string" && !isEnvVarPlaceholder(value) && value.trim() !== "") {
         result[key] = REDACTED_SENTINEL;
         values.push(value);
       } else if (typeof value === "object" && value !== null) {
@@ -231,7 +231,8 @@ function redactValue(
       } else if (
         context.hints?.[candidate]?.sensitive === true &&
         value !== undefined &&
-        value !== null
+        value !== null &&
+        !(typeof value === "string" && value.trim() === "")
       ) {
         result[key] = REDACTED_SENTINEL;
       }
@@ -244,7 +245,8 @@ function redactValue(
       typeof value === "string" &&
       !markedNonSensitive &&
       isSensitivePath(path) &&
-      !isEnvVarPlaceholder(value)
+      !isEnvVarPlaceholder(value) &&
+      value.trim() !== ""
     ) {
       result[key] = REDACTED_SENTINEL;
       values.push(value);

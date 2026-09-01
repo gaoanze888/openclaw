@@ -303,6 +303,31 @@ describe("redactConfigSnapshot", () => {
     expect(restored.mcp.servers.remote.headers["X-Test"]).toBe("ok");
   });
 
+  it("keeps empty MCP env/header values so newly-added entries stay renamable", () => {
+    const hints = buildConfigSchemaCore().uiHints;
+    const snapshot = makeSnapshot({
+      mcp: {
+        servers: {
+          remote: {
+            url: "https://example.com/mcp",
+            env: { "custom-1": "" },
+            headers: { "custom-2": "" },
+          },
+        },
+      },
+    });
+
+    const result = redactConfigSnapshot(snapshot, hints);
+    const servers = (result.config.mcp as { servers: Record<string, Record<string, unknown>> })
+      .servers;
+    const remote = expectDefined(servers.remote, "servers.remote test invariant") as {
+      env: Record<string, string>;
+      headers: Record<string, string>;
+    };
+    expect(remote.env["custom-1"]).toBe("");
+    expect(remote.headers["custom-2"]).toBe("");
+  });
+
   it("redacts sensitive auth material from MCP SSE URLs", () => {
     const hints = buildConfigSchemaCore().uiHints;
     const raw = `{
@@ -802,7 +827,7 @@ describe("redactConfigSnapshot", () => {
     const raw = '{ "gateway": { "auth": { "token": "" } }, "other": "" }';
     const snapshot = makeSnapshot(config, raw);
     const result = redactConfigSnapshot(snapshot);
-    expect(result.config.gateway?.auth?.token).toBe(REDACTED_SENTINEL);
+    expect(result.config.gateway?.auth?.token).toBe("");
     expect(result.raw).toBe(raw);
     expect((result.raw ?? "").split(REDACTED_SENTINEL).length).toBe(1);
   });
