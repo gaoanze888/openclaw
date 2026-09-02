@@ -1711,6 +1711,22 @@ describe("capability cli", () => {
     expect(outputs[0]?.kind).toBe("image.description");
   });
 
+  it("forwards the explicit agent id into image describe media understanding", async () => {
+    mocks.loadConfig.mockReturnValue({
+      agents: { entries: { beta: {} }, ownership: "explicit" },
+    } as never);
+    await runCapabilityWithParentAgent(
+      "image",
+      "describe",
+      "beta",
+      "--file",
+      "photo.jpg",
+      "--json",
+    );
+
+    expect(imageDescribeCall()?.agentId).toBe("beta");
+  });
+
   it.each([
     { domain: "audio", action: "transcribe", file: "memo.m4a", result: "meeting notes" },
     { domain: "image", action: "describe", file: "photo.jpg", result: "friendly lobster" },
