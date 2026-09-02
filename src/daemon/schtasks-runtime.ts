@@ -58,11 +58,28 @@ function parseSchtasksQuery(output: string): ScheduledTaskInfo {
     info.lastRunTime = entries["last run time"];
   }
   // Accept the "Last Result" locale/version variant to avoid false unknown status (#47726).
-  const lastRunResult = entries["last run result"] ?? entries["last result"];
+  const lastRunResult =
+    entries["last run result"] ??
+    entries["last result"] ??
+    resolveNumericSchtasksLastResult(entries);
   if (lastRunResult) {
     info.lastRunResult = lastRunResult;
   }
   return info;
+}
+
+// schtasks localizes field names ("Último resultado", "Dernier résultat", ...),
+// but the result code value stays a plain decimal or 0x hex number. Recover the
+// last-run result from any numeric entry when the English keys are absent, so a
+// non-English display language can still confirm the Gateway is stopped.
+function resolveNumericSchtasksLastResult(entries: Record<string, string>): string | undefined {
+  for (const value of Object.values(entries)) {
+    const raw = value.trim();
+    if (/^0x[0-9a-f]+$/i.test(raw) || /^\d+$/.test(raw)) {
+      return raw;
+    }
+  }
+  return undefined;
 }
 
 export function normalizeTaskResultCode(value?: string): string | null {

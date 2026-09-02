@@ -153,6 +153,37 @@ describe("scheduled task runtime derivation", () => {
       detail: "Task status is locale-dependent and no numeric Last Run Result was available.",
     });
   });
+
+  it("recovers the numeric result code when field names are localized (Spanish)", async () => {
+    await expect(
+      readRuntimeFromQueryOutput(
+        [
+          "Carpeta: \\",
+          "Nombre de tarea: \\OpenClaw Gateway",
+          "Estado: Listo",
+          "Último tiempo de ejecución: 1/09/2026 21:13:35",
+          "Último resultado: 0",
+        ].join("\r\n"),
+      ),
+    ).resolves.toMatchObject({
+      status: "stopped",
+      lastRunResult: "0",
+    });
+  });
+
+  it("detects running from a localized numeric result code (Spanish)", async () => {
+    await expect(
+      readRuntimeFromQueryOutput(
+        [
+          "Carpeta: \\",
+          "Nombre de tarea: \\OpenClaw Gateway",
+          "Estado: En ejecución",
+          "Último tiempo de ejecución: 1/09/2026 21:13:35",
+          "Último resultado: 267009",
+        ].join("\r\n"),
+      ),
+    ).resolves.toMatchObject({ status: "running" });
+  });
 });
 
 describe("resolveTaskScriptPath", () => {
