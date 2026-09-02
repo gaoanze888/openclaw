@@ -35,6 +35,7 @@ import {
   type CronModelSuggestionsState,
   type CronState,
 } from "../../lib/cron/index.ts";
+import { formatUiError } from "../../lib/format-error.ts";
 import {
   resolveSessionNavigationAgentId,
   sessionNavigationTarget,
@@ -60,6 +61,9 @@ class CronPage extends OpenClawLightDomElement {
   private pendingRouteData: ReturnType<typeof resolveCronRouteData> | null = null;
   private highlightedRunId: string | null = null;
   private pendingRunScroll = false;
+  // Monotonic guard so a slow cron.get for a linked job cannot overwrite a later
+  // user selection or a job resolved after the Gateway/page retired.
+  private linkedJobLookupEpoch = 0;
   private modelSuggestionsState: CronState | null = null;
   private readonly gateway = new GatewayPageController(this, {
     getGateway: () => this.context?.gateway,
@@ -197,6 +201,10 @@ class CronPage extends OpenClawLightDomElement {
       const job = this.cron.cronJobs.find((entry) => entry.id === routeData.jobId);
       if (job) {
         this.selectJob(job, routeData.runId);
+      } else if (routeData.jobId) {
+        // The linked job may sit beyond the first inventory page or outside the
+        // current list scope. Resolve it authoritatively so the link still opens.
+        void this.resolveLinkedJobFromGateway(routeData.jobId, routeData.runId);
       }
     }
     if (this.pendingRunScroll) {
@@ -292,6 +300,27 @@ class CronPage extends OpenClawLightDomElement {
       cronState.cronRunsJobId = job.id;
       await loadCronRuns(cronState, job.id);
     });
+  }
+
+  private async resolveLinkedJobFromGateway(jobId: string, runId: string | null) {
+    const cronState = this.cron;
+    if (!cronState.connected || !cronState.client) {
+      return;
+    }
+    const epoch = ++this.linkedJobLookupEpoch;
+    try {
+      const job = await cronState.client.request<CronJob>("cron.get", { id: jobId });
+      if (this.linkedJobLookupEpoch !== epoch || !this.gateway.connected) {
+        return;
+      }
+      this.selectJob(job, runId);
+    } catch (err) {
+      if (this.linkedJobLookupEpoch !== epoch || !this.gateway.connected) {
+        return;
+      }
+      cronState.cronJobsError = formatUiError(err);
+      this.requestCronUpdate();
+    }
   }
 
   private openCreate(patch?: Partial<CronFormState>) {

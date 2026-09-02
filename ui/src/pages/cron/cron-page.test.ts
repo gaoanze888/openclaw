@@ -275,6 +275,49 @@ describe("CronPage editor state sync", () => {
     expect(page.querySelectorAll(".cron-run-entry--highlighted")).toHaveLength(1);
   });
 
+  it("resolves a linked job beyond the first inventory page through cron.get", async () => {
+    const linkedJob: CronJob = {
+      id: "linked-beyond-page",
+      name: "Linked beyond page",
+      enabled: true,
+      createdAtMs: 0,
+      updatedAtMs: 0,
+      schedule: { kind: "every", everyMs: 60_000 },
+      sessionTarget: "isolated",
+      wakeMode: "now",
+      payload: { kind: "agentTurn", message: "digest" },
+      state: {},
+    };
+    const request = vi.fn(async (method: string, _params?: unknown) => {
+      if (method === "cron.list") {
+        // The linked job is excluded from the current list scope; the first
+        // inventory page is empty even though the job exists on the Gateway.
+        return cronListResponse([]);
+      }
+      if (method === "cron.get") {
+        return linkedJob;
+      }
+      if (method === "cron.status") {
+        return { enabled: true, jobs: 51, triggersEnabled: true };
+      }
+      if (method === "cron.runs") {
+        return { entries: [], total: 0, offset: 0, hasMore: false };
+      }
+      if (method === "models.list") {
+        return { models: [] };
+      }
+      return {};
+    });
+    const gateway = createGateway({ request } as unknown as GatewayBrowserClient, true);
+    const page = createPage(createContext(gateway), { render: true });
+    page.routeSearch = "?job=linked-beyond-page&run=cron%3Alinked-beyond-page%3A1";
+
+    await waitForCronPage(() => expect(page.cron.cronEditingJobId).toBe(linkedJob.id));
+    expect(request).toHaveBeenCalledWith("cron.get", { id: linkedJob.id });
+    expect(page.querySelector(".cron-detail-title")?.textContent).toContain(linkedJob.name);
+    expect(page.querySelector('[data-test-id="cron-detail-tab-history"]')).not.toBeNull();
+  });
+
   it.each([
     { scenario: "an unsaved enable edit", active: false, edited: true, saved: false },
     { scenario: "an unsaved disable edit", active: true, edited: false, saved: false },
