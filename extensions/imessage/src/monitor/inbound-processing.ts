@@ -194,6 +194,7 @@ function resolveInboundEchoMessageIds(message: IMessagePayload): string[] {
   const values = [
     message.id != null ? String(message.id) : undefined,
     normalizeReplyField(message.guid),
+    normalizeReplyField(message.reply_to_guid),
   ];
   const ids: string[] = [];
   for (const value of values) {

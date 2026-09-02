@@ -90,6 +90,32 @@ describe("resolveIMessageInboundDecision echo detection", () => {
     expect(logVerbose).toHaveBeenCalledWith(expect.stringContaining("id=42"));
   });
 
+  it("matches inbound reflections by reply_to_guid against the outbound echo cache", async () => {
+    const echoHas = vi.fn((_scope: string, lookup: { messageId?: string }) => {
+      return lookup.messageId === "GUID-A";
+    });
+    const logVerbose = vi.fn();
+
+    const decision = await resolveDecision({
+      message: {
+        id: 43,
+        guid: "GUID-B",
+        reply_to_guid: "GUID-A",
+        text: "ok",
+      },
+      messageText: "ok",
+      bodyText: "ok",
+      echoCache: { has: echoHas },
+      logVerbose,
+    });
+
+    expect(decision).toEqual({ kind: "drop", reason: "echo" });
+    expect(echoHas).toHaveBeenCalledWith(
+      "default:imessage:+15555550123",
+      expect.objectContaining({ messageId: "GUID-A" }),
+    );
+  });
+
   it("matches attachment-only echoes by structured media fact", async () => {
     const echoHas = vi.fn(
       (
