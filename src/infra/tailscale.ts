@@ -393,7 +393,22 @@ export async function claimTailscaleRoute(
     if (!isPermissionDeniedError(error)) {
       throw error;
     }
-    return await startTailscaleRouteOwner(["sudo", "-n", tailscaleBin, ...args]);
+    try {
+      return await startTailscaleRouteOwner(["sudo", "-n", tailscaleBin, ...args]);
+    } catch (sudoError) {
+      // `sudo -n` cannot succeed non-interactively on systemd user services
+      // (no TTY, no NOPASSWD sudoers rule). Tailscale's own mechanism is the
+      // operator setting, which lets the first unprivileged attempt succeed.
+      // Name it so the crash-looping gateway owner can actually fix it instead
+      // of chasing a masked sudo error.
+      const operator = process.env.USER || process.env.LOGNAME || "$USER";
+      // SAFETY: sudoError is the worker's thrown child-process error; its message is safe to surface.
+      const sudoDetail = (sudoError as Error)?.message ?? String(sudoError);
+      throw new Error(
+        `Tailscale ${mode} route needs ownership. Run \`tailscale set --operator=${operator}\` once (with sudo if needed), then restart the gateway. (sudo -n failed: ${sudoDetail})`,
+        { cause: error },
+      );
+    }
   }
 }
 
