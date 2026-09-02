@@ -94,10 +94,16 @@ function stripNullBytes(s: string): string {
 }
 
 /** Lists valid configured agent entries from config. */
+const agentEntriesByRoster = new WeakMap<object, ListedAgentEntry[]>();
+
 export function listAgentEntriesWithSource(cfg: OpenClawConfig): ListedAgentEntry[] {
   const roster = readAgentRosterProperty(cfg);
   if (roster?.kind === "entries" && isRecord(roster.value)) {
-    return Object.entries(roster.value).flatMap(([id, entry]) =>
+    const cached = agentEntriesByRoster.get(roster.value);
+    if (cached) {
+      return cached;
+    }
+    const entries = Object.entries(roster.value).flatMap(([id, entry]) =>
       isRecord(entry)
         ? [
             {
@@ -107,15 +113,23 @@ export function listAgentEntriesWithSource(cfg: OpenClawConfig): ListedAgentEntr
           ]
         : [],
     );
+    agentEntriesByRoster.set(roster.value, entries);
+    return entries;
   }
   if (roster?.kind !== "list" || !Array.isArray(roster.value)) {
     return [];
   }
-  return roster.value.flatMap((entry, index) =>
+  const cached = agentEntriesByRoster.get(roster.value);
+  if (cached) {
+    return cached;
+  }
+  const entries = roster.value.flatMap((entry, index) =>
     entry !== null && typeof entry === "object"
       ? [{ entry: entry as AgentEntry, source: { kind: "list" as const, index } }]
       : [],
   );
+  agentEntriesByRoster.set(roster.value, entries);
+  return entries;
 }
 
 /** Lists valid configured agent entries from either supported representation. */

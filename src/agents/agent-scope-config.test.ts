@@ -22,6 +22,15 @@ import {
 vi.unmock("./agent-scope-config.js");
 
 describe("agent roster resolution", () => {
+  it("memoizes the resolved roster for repeated lookups on the same config reference", () => {
+    const entries = { main: {}, ops: {} };
+    const cfg = { agents: { entries } };
+    const first = listAgentEntriesWithSource(cfg as never);
+    const second = listAgentEntriesWithSource(cfg as never);
+    expect(first).toBe(second);
+    expect(first.map((entry) => entry.entry.id)).toEqual(["main", "ops"]);
+  });
+
   it("rejects unknown configured-agent selections with canonical CLI guidance", () => {
     const cfg = { agents: { entries: { main: {}, ops: {} } } };
 
