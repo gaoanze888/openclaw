@@ -32,6 +32,7 @@ import {
 } from "./auth-profile-success.js";
 import type { EmbeddedRunContextRecoveryState } from "./context-recovery-state.js";
 import { resolveFinalAssistantVisibleText } from "./helpers.js";
+import { hasOnlySilentAssistantReply } from "./incomplete-turn-classification.js";
 import {
   resolveEmptyResponseRetryInstruction,
   resolveReasoningOnlyRetryInstruction,
@@ -130,6 +131,16 @@ export function resolveSettledTurnFinalizationRequest(input: {
     attempt: input.attempt,
   });
   const terminalAssistant = resolveCurrentAttemptAssistant(input.attempt);
+  // Non-interactive runs treat an explicit NO_REPLY after settled tool work as
+  // deliberate silence, never a missing final answer. Skipping finalization here
+  // keeps the run quiet instead of synthesizing fallback text and burning extra
+  // model calls.
+  if (
+    (input.runParams.trigger === "cron" || input.runParams.trigger === "heartbeat") &&
+    hasOnlySilentAssistantReply(input.attempt.assistantTexts)
+  ) {
+    return null;
+  }
   // Payload preparation renders an undelivered tool-error fallback before the
   // model gets its final answer. It must not masquerade as an assistant reply;
   // exact failed-call settlement is independently proven by the finalizer owner.

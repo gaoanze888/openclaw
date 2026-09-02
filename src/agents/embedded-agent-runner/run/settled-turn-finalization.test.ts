@@ -261,6 +261,8 @@ describe("resolveSettledTurnFinalizationRequest", () => {
     expect(request({ trigger: "user", terminalReplyExpectation: "required" })).toBe(
       SETTLED_TOOL_TERMINAL_CONTINUATION_INSTRUCTION,
     );
+    expect(request({ trigger: "cron" as never, terminalReplyExpectation: "required" })).toBeNull();
+    expect(request({ trigger: "heartbeat", terminalReplyExpectation: "required" })).toBeNull();
   });
 
   it("requires an available finalizer and no visible structured error", () => {
