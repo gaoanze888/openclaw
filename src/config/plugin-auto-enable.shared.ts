@@ -34,7 +34,10 @@ import { resolvePluginSetupAutoEnableReasons } from "../plugins/setup-registry.j
 import { collectConfiguredWorkerProviderIds } from "../plugins/worker-provider-config.js";
 import { listBundledWorkerProviderOwners } from "../plugins/worker-provider-manifest.js";
 import { isChannelConfigured } from "./channel-configured.js";
-import { shouldSkipPreferredPluginAutoEnable } from "./plugin-auto-enable.prefer-over.js";
+import {
+  dedupePluginAutoEnableCandidates,
+  shouldSkipPreferredPluginAutoEnable,
+} from "./plugin-auto-enable.prefer-over.js";
 import type {
   PluginAutoEnableCandidate,
   PluginAutoEnableResult,
@@ -1088,6 +1091,7 @@ export function materializePluginAutoEnableCandidatesInternal(params: {
   }
 
   const preferOverCache = new Map<string, string[]>();
+  const dedupedCandidates = dedupePluginAutoEnableCandidates(params.candidates);
 
   for (const entry of params.candidates) {
     const builtInChannelId = resolveAutoEnableChannelId({
@@ -1101,7 +1105,7 @@ export function materializePluginAutoEnableCandidatesInternal(params: {
       shouldSkipPreferredPluginAutoEnable({
         config: next,
         entry,
-        configured: params.candidates,
+        configured: dedupedCandidates,
         env: params.env,
         registry: params.manifestRegistry,
         isPluginDenied,

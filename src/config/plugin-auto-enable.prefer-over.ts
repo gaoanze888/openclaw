@@ -155,6 +155,26 @@ function getPluginAutoEnableCandidateCacheKey(candidate: PluginAutoEnableCandida
   return `${candidate.pluginId}:${candidate.kind === "channel-configured" ? candidate.channelId : candidate.pluginId}`;
 }
 
+// The prefer-over scan only needs each candidate's plugin/channel identity, not
+// every configured model ref. Deduplicating by cache key collapses ~37k
+// provider-model-configured refs down to a handful of unique plugins so the
+// O(candidates²) pair scan does not block Gateway startup on large rosters.
+export function dedupePluginAutoEnableCandidates(
+  candidates: readonly PluginAutoEnableCandidate[],
+): PluginAutoEnableCandidate[] {
+  const seen = new Set<string>();
+  const result: PluginAutoEnableCandidate[] = [];
+  for (const candidate of candidates) {
+    const key = getPluginAutoEnableCandidateCacheKey(candidate);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(candidate);
+  }
+  return result;
+}
+
 export function shouldSkipPreferredPluginAutoEnable(params: {
   config: OpenClawConfig;
   entry: PluginAutoEnableCandidate;
