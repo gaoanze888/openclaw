@@ -228,21 +228,48 @@ function collapseConsecutiveDuplicateBlocks(text: string): string {
   if (!trimmed) {
     return text;
   }
-  const blocks = trimmed.split(/\n{2,}/);
+  const blocks = splitOnBlankLinesOutsideCode(trimmed, findCodeRegions(trimmed));
   if (blocks.length < 2) {
     return text;
   }
   const result: string[] = [];
   let lastNormalized: string | null = null;
   for (const block of blocks) {
-    const normalized = block.trim().replace(/\s+/g, " ");
+    // Normalize only for the duplicate comparison; keep the original block so
+    // leading indentation inside fenced code survives the collapse.
+    const normalized = block.replace(/\s+/g, " ");
     if (lastNormalized && normalized === lastNormalized) {
       continue;
     }
-    result.push(block.trim());
+    result.push(block);
     lastNormalized = normalized;
   }
   return result.length === blocks.length ? text : result.join("\n\n");
+}
+
+// Splits on blank-line runs only outside code regions, so blank lines inside
+// fenced/indented code never split a code block and duplicate collapsing never
+// looks inside code content.
+function splitOnBlankLinesOutsideCode(
+  text: string,
+  regions: ReturnType<typeof findCodeRegions>,
+): string[] {
+  if (regions.length === 0) {
+    return text.split(/\n{2,}/);
+  }
+  const blocks: string[] = [];
+  const blankLineRe = /\n{2,}/g;
+  let blockStart = 0;
+  let match: RegExpExecArray | null;
+  while ((match = blankLineRe.exec(text)) !== null) {
+    if (isInsideCode(match.index, regions)) {
+      continue;
+    }
+    blocks.push(text.slice(blockStart, match.index));
+    blockStart = match.index + match[0].length;
+  }
+  blocks.push(text.slice(blockStart));
+  return blocks;
 }
 
 export function sanitizeUserFacingText(
