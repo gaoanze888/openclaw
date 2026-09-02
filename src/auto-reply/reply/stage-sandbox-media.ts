@@ -12,6 +12,7 @@ import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { logVerbose } from "../../globals.js";
 import { root as fsRoot, FsSafeError, readLocalFileSafely } from "../../infra/fs-safe.js";
 import { safeFileURLToPath } from "../../infra/local-file-access.js";
+import { retryAsync } from "../../infra/retry.js";
 import { normalizeScpRemoteHost, normalizeScpRemotePath } from "../../infra/scp-host.js";
 import { resolvePreferredOpenClawTmpDir } from "../../infra/tmp-openclaw-dir.js";
 import { resolveChannelRemoteInboundAttachmentRoots } from "../../media/channel-inbound-roots.js";
@@ -30,6 +31,9 @@ import type { RuntimeMsgContext as MsgContext, TemplateContext } from "../templa
 /** Maximum size of one file copied into an agent sandbox or staging workspace. */
 export const SANDBOX_MEDIA_MAX_BYTES = 50 * 1024 * 1024;
 const SCP_STDERR_TAIL_CHARS = 16_384;
+const REMOTE_STAGE_SCP_RETRY_ATTEMPTS = 3;
+const REMOTE_STAGE_SCP_RETRY_MIN_DELAY_MS = 400;
+const REMOTE_STAGE_SCP_RETRY_MAX_DELAY_MS = 1_600;
 
 // Attachment indexes are the staging identity. Callers use this map to detect
 // partial failures without matching rewritten strings back to source paths.
@@ -281,7 +285,7 @@ async function stageRemoteFileIntoRoot(params: {
   const tmpDir = await fs.mkdtemp(path.join(tmpRoot, "stage-sandbox-media-"));
   const tmpPath = path.join(tmpDir, "download");
   try {
-    await scpFile(params.remoteHost, params.remotePath, tmpPath);
+    await scpFileWithMaterializationRetry(params.remoteHost, params.remotePath, tmpPath);
     await stageLocalFileIntoRoot({
       sourcePath: tmpPath,
       rootDir: params.rootDir,
@@ -291,6 +295,29 @@ async function stageRemoteFileIntoRoot(params: {
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+// Remote Messages attachments can still be materializing when the inbound turn
+// dispatches; SCP then fails transiently on the first attempt. Retry a bounded
+// number of times so the short staging window is tolerated before the turn
+// continues. Configuration errors (invalid host/path) are permanent and are not
+// retried.
+async function scpFileWithMaterializationRetry(
+  remoteHost: string,
+  remotePath: string,
+  localPath: string,
+): Promise<void> {
+  await retryAsync(() => scpFile(remoteHost, remotePath, localPath), {
+    attempts: REMOTE_STAGE_SCP_RETRY_ATTEMPTS,
+    minDelayMs: REMOTE_STAGE_SCP_RETRY_MIN_DELAY_MS,
+    maxDelayMs: REMOTE_STAGE_SCP_RETRY_MAX_DELAY_MS,
+    jitter: 0,
+    label: "remote inbound media SCP",
+    shouldRetry: (err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      return !/invalid remote (host|path)/i.test(message);
+    },
+  });
 }
 
 function resolveAbsolutePath(value: string): string | null {

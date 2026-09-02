@@ -93,3 +93,66 @@ it.each([
     });
   },
 );
+
+it("retries remote SCP when the attachment is still materializing", async () => {
+  await withOpenClawTestState({ label: "remote-media-retry" }, async (state) => {
+    const cfg = {
+      agents: {
+        ownership: "explicit" as const,
+        entries: { main: {} },
+        defaults: {
+          skipBootstrap: true,
+          sandbox: {
+            mode: "all" as const,
+            scope: "agent" as const,
+            workspaceRoot: state.path("sandbox"),
+            workspaceAccess: "none" as const,
+          },
+        },
+      },
+      session: { scope: "global" as const },
+    };
+    vi.spyOn(mediaRoots, "resolveChannelRemoteInboundAttachmentRoots").mockReturnValue([
+      "/synthetic/attachments",
+    ]);
+    let scpAttempts = 0;
+    vi.spyOn(processExec, "runCommandWithTimeout").mockImplementation(async (argv) => {
+      scpAttempts += 1;
+      if (scpAttempts === 1) {
+        return {
+          code: 1,
+          stdout: "",
+          stderr: "scp: /synthetic/attachments/report.txt: No such file or directory",
+          signal: null,
+          killed: false,
+          termination: "exit",
+        };
+      }
+      await fs.writeFile(argv.at(-1)!, "remote attachment");
+      return {
+        code: 0,
+        stdout: "",
+        stderr: "",
+        signal: null,
+        killed: false,
+        termination: "exit",
+      };
+    });
+    const ctx = {
+      MediaRemoteHost: "user@gateway-host",
+      media: [{ path: "/synthetic/attachments/report.txt" }],
+    };
+    expect(
+      await stageRemoteInboundMediaIfNeeded({
+        ctx,
+        cfg,
+        agentId: "main",
+        sessionKey: "global",
+        workspaceDir: state.path("main-workspace"),
+        remoteMediaMode: "sandbox-or-cache",
+      }),
+    ).toBe(true);
+    expect((ctx.media[0] as { staged?: boolean }).staged).toBe(true);
+    expect(scpAttempts).toBe(2);
+  });
+});
