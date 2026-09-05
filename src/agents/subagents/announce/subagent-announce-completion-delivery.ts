@@ -74,8 +74,10 @@ function collectDirectCompletionContent(params: {
     return { content: FAILED_COMPLETION_NOTICE, mediaUrls: [] };
   }
   const mediaUrls = new Set<string>();
-  // Harvest media from agentResult payloads (visible payloads only).
+  let textContent = "";
+  // Harvest text + media from agentResult payloads (visible payloads only).
   if (Array.isArray(params.agentResult?.payloads)) {
+    // SAFETY: Array.isArray guard above narrows the payloads field to an array.
     for (const payload of params.agentResult!.payloads as readonly unknown[]) {
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
         continue;
@@ -112,10 +114,13 @@ function collectDirectCompletionContent(params: {
       // (nested `attachments` with no top-level mediaUrl/mediaUrls) still
       // contribute their media references.
       collectMediaUrlsFromRecord(record, mediaUrls);
+      if (!textContent && parsed.content) {
+        textContent = parsed.content;
+      }
     }
   }
-  // Legacy event-scan: extract text directly (same as main) so the
-  // behavior is unchanged for text-only completions, then add event media.
+  // Legacy event-scan: collect event media unconditionally, use event text
+  // only as a fallback when no payload text was found.
   for (let index = (params.events?.length ?? 0) - 1; index >= 0; index -= 1) {
     const event = params.events?.[index];
     if (event?.type !== "task_completion" || event.source !== "subagent") {
@@ -124,21 +129,22 @@ function collectDirectCompletionContent(params: {
     if (event.status !== "ok") {
       continue;
     }
-    const result =
-      typeof event.result === "string"
-        ? sanitizeAgentRunTerminalReplyText(sanitizePendingFinalDeliveryText(event.result))
-        : "";
-    if (result && result !== "(no output)") {
-      const eventMedia = collectAgentInternalEventMedia([event]).mediaUrls;
-      for (const url of eventMedia) {
-        mediaUrls.add(url);
+    const eventMedia = collectAgentInternalEventMedia([event]).mediaUrls;
+    for (const url of eventMedia) {
+      mediaUrls.add(url);
+    }
+    if (!textContent) {
+      const result =
+        typeof event.result === "string"
+          ? sanitizeAgentRunTerminalReplyText(sanitizePendingFinalDeliveryText(event.result))
+          : "";
+      if (result && result !== "(no output)") {
+        textContent = result;
       }
-      return { content: result, mediaUrls: [...mediaUrls] };
     }
   }
-  // No text found — but we may have collected media from agentResult payloads.
-  if (mediaUrls.size > 0) {
-    return { content: "", mediaUrls: [...mediaUrls] };
+  if (textContent || mediaUrls.size > 0) {
+    return { content: textContent, mediaUrls: [...mediaUrls] };
   }
   return undefined;
 }
