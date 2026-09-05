@@ -75,8 +75,10 @@ function collectDirectCompletionContent(params: {
   }
   const mediaUrls = new Set<string>();
   let textContent = "";
+  let scannedPayloads = false;
   // Harvest text + media from agentResult payloads (visible payloads only).
   if (Array.isArray(params.agentResult?.payloads)) {
+    scannedPayloads = true;
     // SAFETY: Array.isArray guard above narrows the payloads field to an array.
     for (const payload of params.agentResult!.payloads as readonly unknown[]) {
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
@@ -120,7 +122,8 @@ function collectDirectCompletionContent(params: {
     }
   }
   // Legacy event-scan: collect event media unconditionally, use event text
-  // only as a fallback when no payload text was found.
+  // only as a fallback when no payloads were scanned (agentResult missing
+  // or payload-less) and no payload text was found.
   for (let index = (params.events?.length ?? 0) - 1; index >= 0; index -= 1) {
     const event = params.events?.[index];
     if (event?.type !== "task_completion" || event.source !== "subagent") {
@@ -133,7 +136,7 @@ function collectDirectCompletionContent(params: {
     for (const url of eventMedia) {
       mediaUrls.add(url);
     }
-    if (!textContent) {
+    if (!scannedPayloads && !textContent) {
       const result =
         typeof event.result === "string"
           ? sanitizeAgentRunTerminalReplyText(sanitizePendingFinalDeliveryText(event.result))
