@@ -114,8 +114,8 @@ function collectDirectCompletionContent(params: {
       // (nested `attachments` with no top-level mediaUrl/mediaUrls) still
       // contribute their media references.
       collectMediaUrlsFromRecord(record, mediaUrls);
-      if (!textContent && parsed.content) {
-        textContent = parsed.content;
+      if (!textContent && parsed.text) {
+        textContent = parsed.text;
       }
     }
   }
