@@ -199,6 +199,7 @@ export async function deliverCompletionDirect(params: {
   }
   const idempotencyKey = `${params.directIdempotencyKey}:text-direct`;
   let committedDelivery: SubagentAnnounceDeliveryResult | undefined;
+  let partialSendEvidence: { deliveredAt: number } | undefined;
   try {
     if (params.isSourceSessionEffectsAllowed?.() === false) {
       return sourceOwnerChangedResult();
@@ -227,13 +228,15 @@ export async function deliverCompletionDirect(params: {
         }
       },
       onDeliveryResult: () => {
-        if (committedDelivery) {
-          return;
+        // Record per-send evidence (platform accepted the first
+        // attachment) without publishing whole-completion success.
+        // Multi-attachment fallbacks must not report success until the
+        // full batch settles, so a later-attachment throw surfaces as a
+        // failure with the already-committed identity preserved for the
+        // caller. Whole-completion success is deferred to sendResult.
+        if (!partialSendEvidence) {
+          partialSendEvidence = { deliveredAt: Date.now() };
         }
-        // Platform identity is committed before transcript mirroring, which
-        // may wait behind the requester's still-active SQLite writer.
-        committedDelivery = { delivered: true, path: "direct", deliveredAt: Date.now() };
-        params.onDeliveryResult?.(committedDelivery);
       },
       mirror: {
         sessionKey: params.requesterSessionKey,
@@ -241,9 +244,6 @@ export async function deliverCompletionDirect(params: {
         idempotencyKey,
       },
     });
-    if (committedDelivery) {
-      return committedDelivery;
-    }
     if (sendResult.deliveryStatus === "suppressed") {
       const ambiguous = sendResult.suppressionReason === "adapter_returned_no_identity";
       return {
@@ -258,12 +258,27 @@ export async function deliverCompletionDirect(params: {
           : { disposition: "intentional_non_delivery" as const, terminal: true }),
       };
     }
-    return { delivered: true, path: "direct" };
+    committedDelivery = {
+      delivered: true,
+      path: "direct",
+      deliveredAt: partialSendEvidence?.deliveredAt ?? Date.now(),
+    };
+    params.onDeliveryResult?.(committedDelivery);
+    return committedDelivery;
   } catch (err) {
-    if (committedDelivery) {
-      // Post-send bookkeeping must never turn an identified delivery into a
-      // retryable failure and send the same completion twice.
-      return committedDelivery;
+    if (partialSendEvidence) {
+      // Partial failure: the platform committed identity for the
+      // first attachment(s), but a later attachment in this
+      // multi-media fallback threw. Do not publish whole-completion
+      // success; surface the partial outcome so the caller does not
+      // retry attachments already accepted by the platform.
+      return {
+        delivered: false,
+        path: "direct",
+        error: `text completion direct delivery partially failed: ${summarizeDeliveryError(err)}`,
+        deliveredAt: partialSendEvidence.deliveredAt,
+        disposition: "ambiguous",
+      };
     }
     if (err instanceof SourceOwnerChangedError) {
       return sourceOwnerChangedResult();
