@@ -1951,10 +1951,6 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     );
   });
 
-   it.each([
-     {
-       name: "intentional suppression",
-
   it.each([
     {
       name: "intentional suppression",
