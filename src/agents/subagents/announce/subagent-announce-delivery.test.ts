@@ -1884,7 +1884,6 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     }
   });
 
- 
   it.each([
     {
       name: "caption plus structured and directive media",
@@ -2220,7 +2219,6 @@ describe("deliverSubagentAnnouncement completion delivery", () => {
     expect(directPayload).not.toHaveProperty("mediaUrls");
     expect(directPayload.content).not.toContain(privateMedia);
   });
-
 
   it.each(["cancelled", "source owner changed"] as const)(
     "stops a failed-child notice when %s at platform dispatch",
