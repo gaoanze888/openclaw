@@ -59,6 +59,12 @@ export function isDirectMessageDeliveryTarget(
 
 type DirectCompletionContent = { content: string; mediaUrls: string[] };
 
+/**
+ * Collect text + media for a direct completion fallback. Mirrors the
+ * legacy event-scan logic for text extraction (so existing tests keep
+ * passing) while additionally harvesting media references from the
+ * agentResult payloads and the completion events.
+ */
 function collectDirectCompletionContent(params: {
   agentResult?: { payloads?: unknown };
   events: readonly AgentInternalEvent[] | undefined;
@@ -67,14 +73,14 @@ function collectDirectCompletionContent(params: {
   if (params.contentKind === "failed_notice") {
     return { content: FAILED_COMPLETION_NOTICE, mediaUrls: [] };
   }
-  const collect = (payloads: readonly unknown[]): DirectCompletionContent | undefined => {
-    const textParts: string[] = [];
-    const mediaUrls = new Set<string>();
-    for (const payload of payloads) {
+  const mediaUrls = new Set<string>();
+  // Harvest media from agentResult payloads (visible payloads only).
+  if (Array.isArray(params.agentResult?.payloads)) {
+    for (const payload of params.agentResult!.payloads as readonly unknown[]) {
       if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
         continue;
       }
-      // SAFETY: The object/array guard above narrows payload to a plain record boundary.
+      // SAFETY: The object/array guard above narrows payload to a record.
       const record = payload as Record<string, unknown>;
       if (
         !hasVisibleAgentPayload(
@@ -92,52 +98,47 @@ function collectDirectCompletionContent(params: {
       const normalized = normalizeOutboundReplyPayloadCore(record);
       // SAFETY: Sanitize before extracting media directives so a MEDIA: line
       // inside an INTERNAL_RUNTIME_CONTEXT block is not forwarded to
-      // sendMessage as an attachment. The display sanitizer strips the block
-      // from text; extracting first would collect its URL into mediaUrls.
+      // sendMessage as an attachment.
       const sanitized = sanitizePendingFinalDeliveryText(normalized.text ?? "");
       const parsed = splitMediaFromOutput(sanitized);
-      const text = sanitizeAgentRunTerminalReplyText(parsed.text);
-      if (text && text !== "(no output)") {
-        textParts.push(text);
-      }
-      for (const mediaUrl of [
+      for (const url of [
         ...(normalized.mediaUrl ? [normalized.mediaUrl] : []),
         ...(normalized.mediaUrls ?? []),
         ...(parsed.mediaUrls ?? []),
       ]) {
-        mediaUrls.add(mediaUrl);
+        mediaUrls.add(url);
       }
-      // SAFETY: Reuse the nested media-reference collector so attachment-only
-      // payloads (nested `attachments` with no top-level mediaUrl/mediaUrls)
-      // still contribute their media references instead of reaching this
-      // fallback as visible content with no media or text to send.
+      // SAFETY: Reuse the nested media collector so attachment-only payloads
+      // (nested `attachments` with no top-level mediaUrl/mediaUrls) still
+      // contribute their media references.
       collectMediaUrlsFromRecord(record, mediaUrls);
     }
-    return textParts.length > 0 || mediaUrls.size > 0
-      ? { content: textParts.join("\n\n"), mediaUrls: [...mediaUrls] }
-      : undefined;
-  };
-
-  const payloadContent = Array.isArray(params.agentResult?.payloads)
-    ? collect(params.agentResult.payloads)
-    : undefined;
-  if (payloadContent && payloadContent.mediaUrls.length > 0) {
-    return payloadContent;
   }
+  // Legacy event-scan: extract text directly (same as main) so the
+  // behavior is unchanged for text-only completions, then add event media.
   for (let index = (params.events?.length ?? 0) - 1; index >= 0; index -= 1) {
     const event = params.events?.[index];
-    if (event?.type !== "task_completion" || event.source !== "subagent" || event.status !== "ok") {
+    if (event?.type !== "task_completion" || event.source !== "subagent") {
       continue;
     }
-    const parsedEvent = collect([{ text: event.result }]);
-    const eventMediaUrls = collectAgentInternalEventMedia([event]).mediaUrls;
-    const mediaUrls = new Set([...(parsedEvent?.mediaUrls ?? []), ...eventMediaUrls]);
-    if (parsedEvent || mediaUrls.size > 0) {
-      return {
-        content: parsedEvent?.content ?? "",
-        mediaUrls: [...mediaUrls],
-      };
+    if (event.status !== "ok") {
+      continue;
     }
+    const result =
+      typeof event.result === "string"
+        ? sanitizeAgentRunTerminalReplyText(sanitizePendingFinalDeliveryText(event.result))
+        : "";
+    if (result && result !== "(no output)") {
+      const eventMedia = collectAgentInternalEventMedia([event]).mediaUrls;
+      for (const url of eventMedia) {
+        mediaUrls.add(url);
+      }
+      return { content: result, mediaUrls: [...mediaUrls] };
+    }
+  }
+  // No text found — but we may have collected media from agentResult payloads.
+  if (mediaUrls.size > 0) {
+    return { content: "", mediaUrls: [...mediaUrls] };
   }
   return undefined;
 }
@@ -199,7 +200,6 @@ export async function deliverCompletionDirect(params: {
   }
   const idempotencyKey = `${params.directIdempotencyKey}:text-direct`;
   let committedDelivery: SubagentAnnounceDeliveryResult | undefined;
-  let partialSendEvidence: { deliveredAt: number } | undefined;
   try {
     if (params.isSourceSessionEffectsAllowed?.() === false) {
       return sourceOwnerChangedResult();
@@ -228,15 +228,13 @@ export async function deliverCompletionDirect(params: {
         }
       },
       onDeliveryResult: () => {
-        // Record per-send evidence (platform accepted the first
-        // attachment) without publishing whole-completion success.
-        // Multi-attachment fallbacks must not report success until the
-        // full batch settles, so a later-attachment throw surfaces as a
-        // failure with the already-committed identity preserved for the
-        // caller. Whole-completion success is deferred to sendResult.
-        if (!partialSendEvidence) {
-          partialSendEvidence = { deliveredAt: Date.now() };
+        if (committedDelivery) {
+          return;
         }
+        // Platform identity is committed before transcript mirroring, which
+        // may wait behind the requester's still-active SQLite writer.
+        committedDelivery = { delivered: true, path: "direct", deliveredAt: Date.now() };
+        params.onDeliveryResult?.(committedDelivery);
       },
       mirror: {
         sessionKey: params.requesterSessionKey,
@@ -244,6 +242,9 @@ export async function deliverCompletionDirect(params: {
         idempotencyKey,
       },
     });
+    if (committedDelivery) {
+      return committedDelivery;
+    }
     if (sendResult.deliveryStatus === "suppressed") {
       const ambiguous = sendResult.suppressionReason === "adapter_returned_no_identity";
       return {
@@ -258,27 +259,12 @@ export async function deliverCompletionDirect(params: {
           : { disposition: "intentional_non_delivery" as const, terminal: true }),
       };
     }
-    committedDelivery = {
-      delivered: true,
-      path: "direct",
-      deliveredAt: partialSendEvidence?.deliveredAt ?? Date.now(),
-    };
-    params.onDeliveryResult?.(committedDelivery);
-    return committedDelivery;
+    return { delivered: true, path: "direct" };
   } catch (err) {
-    if (partialSendEvidence) {
-      // Partial failure: the platform committed identity for the
-      // first attachment(s), but a later attachment in this
-      // multi-media fallback threw. Do not publish whole-completion
-      // success; surface the partial outcome so the caller does not
-      // retry attachments already accepted by the platform.
-      return {
-        delivered: false,
-        path: "direct",
-        error: `text completion direct delivery partially failed: ${summarizeDeliveryError(err)}`,
-        deliveredAt: partialSendEvidence.deliveredAt,
-        disposition: "ambiguous",
-      };
+    if (committedDelivery) {
+      // Post-send bookkeeping must never turn an identified delivery into a
+      // retryable failure and send the same completion twice.
+      return committedDelivery;
     }
     if (err instanceof SourceOwnerChangedError) {
       return sourceOwnerChangedResult();
