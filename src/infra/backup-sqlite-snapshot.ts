@@ -93,6 +93,14 @@ function resolveBackupAgentDatabaseOwner(
 }
 
 function resolveSqliteBackupDatabasePath(sourcePath: string): string | undefined {
+  // macOS AppleDouble metadata files (e.g. `._cron.sqlite`) use a `._` prefix
+  // and are not SQLite databases. Treating them as databases makes backup
+  // discovery attempt SQLite compaction on a non-database file and abort
+  // the whole archive before it is produced.
+  const baseName = path.basename(sourcePath);
+  if (baseName.startsWith("._")) {
+    return undefined;
+  }
   for (const suffix of SQLITE_SIDECAR_SUFFIXES) {
     if (sourcePath.endsWith(suffix)) {
       const databasePath = sourcePath.slice(0, -suffix.length);

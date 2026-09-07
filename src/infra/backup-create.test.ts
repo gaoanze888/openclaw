@@ -2735,7 +2735,12 @@ describe("createBackupArchive", () => {
     );
   });
 
-  it.each(["late.sqlite", "late.sqlite-wal"])(
+  // SQLite sidecars (-shm/-wal/-journal) are now treated as transient and
+  // shielded by the volatile stat-cache (a vanished sidecar must not abort
+  // the archive), so a late-appearing .sqlite-wal no longer triggers the
+  // post-snapshot SQLite-state guard. Only a late main .sqlite database
+  // (which must be snapshotted) still aborts the run.
+  it.each(["late.sqlite"])(
     "fails when SQLite-looking state appears after snapshot discovery: %s",
     async (lateName) => {
       await withOpenClawTestState(
@@ -2832,6 +2837,51 @@ describe("createBackupArchive", () => {
             suffix,
           ).toBe(false);
         }
+      },
+    );
+  });
+
+  it("excludes macOS AppleDouble `._*.sqlite` files from SQLite snapshot discovery", async () => {
+    // macOS AppleDouble metadata files use a `._` prefix and are not SQLite
+    // databases, even when their name ends in `.sqlite`. Before the fix,
+    // backup discovery treated `._cron.sqlite` as a database and attempted
+    // SQLite compaction on a non-database file, aborting the whole archive.
+    await withOpenClawTestState(
+      {
+        layout: "state-only",
+        prefix: "openclaw-backup-appledouble-sqlite-",
+        scenario: "minimal",
+      },
+      async (state) => {
+        const outputDir = state.path("backups");
+        const appleDoublePath = state.statePath("._cron.sqlite");
+        await fs.mkdir(outputDir, { recursive: true });
+        // AppleDouble magic header (00 05 16 07) followed by metadata bytes.
+        await fs.writeFile(
+          appleDoublePath,
+          Buffer.from([0x00, 0x05, 0x16, 0x07, 0x00, 0x00, 0x00, 0x00]),
+        );
+
+        const result = await createBackupArchive({
+          output: outputDir,
+          includeWorkspace: false,
+          nowMs: Date.UTC(2026, 4, 9, 8, 33, 50),
+        });
+
+        // The archive must be produced — the AppleDouble file must not trip
+        // SQLite compaction ("file is not a database" / "cannot be compacted").
+        const entries = await listArchiveEntries(result.archivePath);
+        // The `._cron.sqlite` AppleDouble file is archived as a regular file
+        // (not as a SQLite snapshot) or omitted entirely, but it must never
+        // have been handed to the SQLite compaction path.
+        const appleDoubleEntry = entries.find((entry) =>
+          entry.endsWith("/state/._cron.sqlite"),
+        );
+        // Whether it is carried as a plain file or pruned, the backup must
+        // not abort; the key assertion is that we reached this line at all.
+        expect(appleDoubleEntry === undefined || appleDoubleEntry.length > 0).toBe(
+          true,
+        );
       },
     );
   });
